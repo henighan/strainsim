@@ -1,0 +1,10 @@
+#use glob syntax.
+syntax: glob
+
+*.asv
+*.pdf
+old/*
+*cap*.mat
+*Cap*.mat
+*strain*.txt
+strain*.txt

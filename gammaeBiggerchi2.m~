@@ -1,0 +1,116 @@
+function [redchi2, t0list] = gammaeBiggerchi2(strainstuff, geometry, Ti0, paramvec)
+
+% show current parameters of fit
+disp(num2str(paramvec))
+
+F = paramvec(1);
+%elstrcoeff = paramvec(2);
+phioffset = paramvec(2);
+atl = paramvec(3);
+elstrcoeff = paramvec(4);
+
+% this is the kspace bandwidth of the LCLS pink beam, which will dictate
+% how wide we expect our truncation rod to be
+ksbw = 0.006;
+
+Ti = strainstuff.Temp0 + F*Ti0;
+
+%elstrcoeff = 3.6;
+%elstrcoeff = 0;
+
+%starting t0 offset
+t0off0 = -0.08;
+
+% guess what the strain would be with the new parameters of the fit
+% to be precise, we should re-simulate the temperatures and strain with the
+% new parameters, but this is computationally expensive and slow.
+
+% We can approsimate the new strain pretty well by assuming its linear in
+% the fluence and that the electronic contribution to the strain is linear
+% in the electronic strain coefficient (effectively the electronic
+% Gruneisen parameter). Doing this iteratively, one can converge to the
+% true fit parameters by running the fitting routine a few times.
+
+strainstuff.straini = strainstuff.straini0*F;
+%disp(num2str(sum(isnan(strainstuff.straini(:)))))
+
+strainstuff.straine = strainstuff.straine0*F*elstrcoeff;
+%disp(num2str(sum(isnan(strainstuff.straine(:)))))
+
+strainstuff.strain = strainstuff.straini + strainstuff.straine;
+%disp(num2str(sum(isnan(strainstuff.strain(:)))))
+
+%strainstuff.Timean = strainstuff.Timean0*F;
+strainstuff.Timean = strainstuff.Temp0 + F*strainstuff.Timean0;
+%disp(num2str(sum(isnan(strainstuff.Timean(:)))))
+
+%[~, raw_sim_pc, raw_sim_delays] = roisim4(geometry, strainstuff, atl);
+
+
+t0list = zeros(1, 8);
+
+%i = 3;
+% calculate the reduce chi^2 over all 4 traces that we're fitting
+
+bigchi2 = 0;
+ptsum = 0;
+for i = [1 2 3 5]
+    
+    %philist = [-40 -33.5 -30 -32];
+    %runs = [164 170 175 177];
+    philist = [-32 -42 -33.5 -36 -30 -29];
+    runs = [180 184 168 166 175 183];
+    
+    tstart = -3;
+    tend = 6;
+    
+    load(['roiSimMatfiles/run', num2str(runs(i)), 'roidata.mat'])
+    %roi_delays = roi_delays + 0.13;
+    data_pc = roi_pc((tstart<roi_delays & tend>roi_delays));
+    data_delays = roi_delays((tstart<roi_delays & tend>roi_delays));
+    
+    data_pc = data_pc(isfinite(data_pc));
+    data_delays = data_delays(isfinite(data_pc));
+    
+    datainfo = struct(  'data_delays',data_delays,...
+        'data_pc',data_pc);
+    
+    
+    
+    % the grazing angle (sample orientation)
+    geometry.alpha = 0.4;
+    
+    % angle about 
+    phi = philist(i) + phioffset;
+    
+    %Rotation matrix for this phi
+    Rot 	= eye(3);		% eye(3) is the identity
+    
+    Rot		= rotationmat3D(phi,[0 0 1])*Rot;		% rotation along sample normal [deg]
+    Rot		= rotationmat3D(geometry.alpha,[0 -1 0])*Rot;	% alpha = incidence angle [deg]
+    Rot		= rotationmat3D(geometry.chi,[1 0 0])*Rot;	% chi = rotation angle about x ray direction [deg]
+    
+    geometry.Rot = Rot;
+    %geometry.Rot
+    
+    %disp(['size of Ti is ' num2str(size(Ti))])
+    %[roi_off, roi_pc, roi_delays] = roisim2(geometry, strainstuff, atl);
+    
+    [t0list(i), chi2, npts] = optimizet0(geometry, strainstuff, datainfo, atl, t0off0, ksbw, Ti);
+    
+    bigchi2 = bigchi2 + chi2;
+    ptsum = ptsum + npts;
+end
+%chi2 = -1;
+redchi2 = bigchi2/(ptsum - length(paramvec) - 2);
+disp(['redchi2 is ' num2str(redchi2)])
+%[~, raw_sim_pc, raw_sim_delays] = roisim4(geometry, strainstuff, atl);
+%disp([num2str(sum(isnan(raw_sim_pc))) ' nans in raw_sim_pc in bigchi'])
+%seestrain(expdet, strainstuff)
+
+end
+
+
+
+
+

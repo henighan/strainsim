@@ -1,0 +1,1 @@
+going to change biggerchi2 and optimizet0 for better DC offset on ROI data and try slightly more accurate calculation of reduced chi2
